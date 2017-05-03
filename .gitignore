@@ -24,6 +24,3 @@ vignettes/*.pdf
 *.utf8.md
 *.knit.md
 .Rproj.user
-# Packrat files
-tests/testthat/packrat/
-packrat-scenario*/

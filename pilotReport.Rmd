@@ -103,27 +103,39 @@ First, for pupil diameter - one raw file of the Tobii recording was given for ea
 pupildata = grep("participant", ls(), value=T)
 for (i in pupildata){
   #first remove skips between lines & non-trial recordings
-  temp = get(i)
-  temp = subset(temp, is.na(temp$MediaName)==FALSE)
-  #put in megablock timestamp (restart timestamp for each medianame)
-  temp$BlockTimestamp = NA
-  for (k in levels(factor(temp$MediaName))) {
-    temp$BlockTimestamp[which(temp$MediaName==k)] = as.numeric(temp$RecordingTimestamp[which(temp$MediaName==k)]) - as.numeric(temp$RecordingTimestamp[which(temp$MediaName==k)][1])
-  }
-  #insert trial number for each block, assuming 2300ms per trial
-  temp$TrialNumber = floor((temp$BlockTimestamp/2300))+1
-  
-  #insert indicator for number of eyes with pupil measure for each sampling point
-  temp$NEyes = ifelse(is.na(temp$PupilLeft)==FALSE & is.na(temp$PupilRight)==FALSE, 2, 
-                      ifelse(is.na(temp$PupilLeft) & is.na(temp$PupilRight), 0, 1))
-  #keep only relevant conditions (not ones that say "eyes"; nor the calibration or sounds)
-  conditionsrm = grep("eyes|calib|sound|quietsch|tusch|melodie|knall", levels(factor(temp$MediaName)), value=T)
-  temp = subset(temp, temp$MediaName %in% conditionsrm==FALSE)
-  assign(paste(i, "analyzed", sep="_"), temp)
+  if (nrow(get(i)) > 5) {
+    temp = get(i)
+    temp = subset(temp, is.na(temp$MediaName)==FALSE)
+    #put in megablock timestamp (restart timestamp for each medianame)
+    temp$BlockTimestamp = NA
+    for (k in levels(factor(temp$MediaName))) {
+      temp$BlockTimestamp[which(temp$MediaName==k)] = as.numeric(temp$RecordingTimestamp[which(temp$MediaName==k)]) - as.numeric(temp$RecordingTimestamp[which(temp$MediaName==k)][1])
+    }
+    #insert trial number for each block, assuming 2300ms per trial
+    temp$TrialNumber = floor((temp$BlockTimestamp/2300))+1
+    
+    #insert indicator for number of eyes with pupil measure for each sampling point
+    temp$NEyes = ifelse(is.na(temp$PupilLeft)==FALSE & is.na(temp$PupilRight)==FALSE, 2, 
+                        ifelse(is.na(temp$PupilLeft) & is.na(temp$PupilRight), 0, 1))
+    #keep only relevant conditions (not ones that say "eyes"; nor the calibration or sounds)
+    conditionsrm = grep("eyes|calib|sound|quietsch|tusch|melodie|knall", levels(factor(temp$MediaName)), value=T)
+    temp = subset(temp, temp$MediaName %in% conditionsrm==FALSE)
+    #add column for participant
+    temp$participant = i
+    assign(paste(i, "analyzed", sep="_"), temp)}
+  else {}
 }
+
+#bind datafiles together
 
 
 ```
+
+How many trials had data for only 1 eye?
+```{r}
+
+```
+
 
 ## Step 4: Run analysis
 
