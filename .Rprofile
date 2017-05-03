@@ -1,3 +1,1 @@
-#### -- Packrat Autoloader (version 0.4.7-1) -- ####
-source("packrat/init.R")
-#### -- End Packrat Autoloader -- ####
+.libPaths("/Library/Frameworks/R.framework/Versions/3.3/Resources/library")

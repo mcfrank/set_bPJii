@@ -1,0 +1,152 @@
+---
+title: "COD Reproducibility Report"
+output:
+  html_document:
+    toc: true
+    toc_float: true
+---
+
+#### Article ID: bPJii
+#### Pilot: Alicia Hofelich Mohr
+#### Co-pilot: Tom Hardwicke  
+#### Start date: 04-28-2017
+#### End date: [Insert end date - use US format]   
+
+-------
+
+#### Methods summary: 
+Infants were presented with pictures of fearful and happy faces that were displayed subliminally (50ms; followed by a scrambled neutral face mask; then a neutral face for 900ms) or supraliminally (50ms; followed by a scrambled neutral face mask; then a face of the same emotion for 900ms). Eyetracking was used to measure pupil dialation across the whole trial and the duration of fixation on the second face. 
+
+------
+
+#### Target outcomes: 
+> 3.1. Pupil diameter
+
+> We observed a main effect of Emotion [F(1, 19) = 6.45, MSE = .0039, p = .02, η2 = .25], revealing a larger pupil diameter for happy compared to fearful facial expressions irrespective of presentation condition (Figs. 2A and 3). There was no main effect of Presentation Condition [F(1, 19) = 0.40, MSE = .0029, p = .53, η2 = .02] and no interaction between Presentation Condition and Emotion [F(1, 19) = 1.17, MSE = .0011, p = .29, η2 = .06].
+
+> A control analysis excluding items from one actress displaying no teeth in the fearful condition (see Methods) and three participants yielded a similar pattern of results, although the main effect of emotion is only marginally significant in this case [F(1, 16) = 3.845, p = 0.068, η2 = .19]. The marginal effect is likely explained by reduced power because we had to exclude three additional infants from this analysis (n = 17 instead of n = 20 in the main analysis) in order to adhere to our inclusion criterion.
+
+> 3.2. Fixation duration
+
+> While the main focus of the study was clearly on the analysis of pupil size, we also compared differences in fixation duration to complement this analysis.
+
+> As for pupil size, we observed a main effect of Emotion; infants showed a significantly longer fixation duration for happy compared to fearful facial expressions [F(1, 21) = 4.57, MSE = 0.015, p = .044, η2 = .19]. Furthermore, we found a main effect of Presentation Condition, showing that infants looked longer in the subliminal compared to the supraliminal condition [F(1, 21) = 8.57, MSE = 0.020, p = .008, η2 = .29] (see Fig. 2B). Note that in the subliminal conditions, a neutral face was presented during the time used for analyzing the fixation duration; hence, this effect can also be framed as a longer looking duration to neutral faces (as compared to emotional faces) preceded by subliminal emotional ones. An interaction between Presentation Condition and AOI [F(1, 21) = 20.42, MSE = 0.010, p < .001, η2 = .49] revealed that this was the case in particular for the eye region [t(21) = −4.06, p < .001, r = .66].
+
+> Furthermore, we observed a main effect of AOI [F(1, 21) = 59.05, MSE = 0.073, p < .001, η2 = .74], showing that infants fixated longer on the eye than on the mouth AOI.
+
+> There was no significant interaction between Emotion and Presentation Condition [F(1, 21) = 0.09, MSE = 0.007, p = .77, η2 = .004], AOI and Emotion [F(1, 21) = 0.004, MSE = 0.008, p = .95, η2 = .0002], or Emotion, Presentation Condition, and AOI [F(1, 21) = 1.76, MSE = 006, p = .20, η2 = .077].
+
+> 3.3. Results of correlation analysis
+
+> We did not observe a significant correlation between pupil diameter and fixation duration for the sum of both AOIs (p = .51, r = −.18), for the eye AOI (p = .31, r = −.27), or for the mouth AOI (p = .55, r = .16).
+
+------
+
+
+```{r global_options, include=FALSE}
+knitr::opts_chunk$set(echo=TRUE, warning=FALSE, message=FALSE)
+```
+
+## Step 1: Load packages
+
+
+```{r}
+library(tidyverse) # for data munging
+library(knitr) # for kable table formating
+library(haven) # import and export 'SPSS', 'Stata' and 'SAS' Files
+library(readxl) # import excel files
+library(CODreports) # custom report functions
+```
+
+## Step 2: Load data
+
+Data are in two files. data1.xlsx appears to be the fixation data for each participant by condition and area of interest (AOI), while data2.xlsx appears to be the raw pupil size data for each participant and by trial timestamp. Many sheets per file, with variable names across multiple rows. 
+
+```{r, warning=FALSE}
+data1sheets =  excel_sheets(path="data/data1.xlsx")
+
+#read in the data for each sheet
+for (i in data1sheets){
+  #read in legend separately
+  if (i == "legend") {
+    data1legend = read_excel(path="data/data1.xlsx", sheet=which(data1sheets==i), col_names = FALSE)}
+  else {
+    temp = read_excel(path="data/data1.xlsx", sheet=which(data1sheets==i), skip=3, col_names = FALSE, col_types = "numeric")
+    #put in column names
+    tempnames = as.data.frame(t(read_excel(path="data/data1.xlsx", sheet=which(data1sheets==i), col_names = FALSE, col_types = "text")[1:3,]))
+    tempnames = fill(tempnames, V1:V2)
+    names(temp) = gsub(" |NA", "",  apply(tempnames, 1, paste, collapse="_"))
+    assign(paste(i, sep=""), temp)
+    }
+}
+
+data2sheets =  excel_sheets(path="data/data2.xlsx")
+for (i in data2sheets){
+  #read in legend separately
+    temp = read_excel(path="data/data2.xlsx", sheet=which(data2sheets==i), col_names = TRUE, col_types = "text")
+    assign(paste(i, sep=""), temp)
+}
+
+```
+
+## Step 3: Tidy data
+
+### Pre-processing
+
+Because the raw data is given, all the preprocessing described in the article needs to be repeated. 
+
+First, for pupil diameter - one raw file of the Tobii recording was given for each participant. Need to remove trials based on their logic, and then take pupil averages per trial, then per condition and participant. 
+
+> Pupil diameter was recorded for both eyes separately, and if data was available for both eyes, the mean was computed. If a value was only available for one eye, this value was considered for further analysis (on average 15% of the data points). For analyzing the pupil size, the entire duration of one trial (i.e. 2300 ms) was considered (Fig. 1). A trial was excluded from further analysis if a value was recorded for less than 50% of the sampling points during this time. Additionally, a trial was excluded if the infant did not look at the section of the screen where the sub- liminal stimulus (face 1) was presented in the subliminal condi- tions to ensure that infants were able to process the stimuli (on an unconscious level). 
+
+```{r}
+pupildata = grep("participant", ls(), value=T)
+for (i in pupildata){
+  #first remove skips between lines & non-trial recordings
+  temp = get(i)
+  temp = subset(temp, is.na(temp$MediaName)==FALSE)
+  #put in megablock timestamp (restart timestamp for each medianame)
+  temp$BlockTimestamp = NA
+  for (k in levels(factor(temp$MediaName))) {
+    temp$BlockTimestamp[which(temp$MediaName==k)] = as.numeric(temp$RecordingTimestamp[which(temp$MediaName==k)]) - as.numeric(temp$RecordingTimestamp[which(temp$MediaName==k)][1])
+  }
+  #insert trial number for each block, assuming 2300ms per trial
+  temp$TrialNumber = floor((temp$BlockTimestamp/2300))+1
+  
+  #insert indicator for number of eyes with pupil measure for each sampling point
+  temp$NEyes = ifelse(is.na(temp$PupilLeft)==FALSE & is.na(temp$PupilRight)==FALSE, 2, 
+                      ifelse(is.na(temp$PupilLeft) & is.na(temp$PupilRight), 0, 1))
+  #keep only relevant conditions (not ones that say "eyes"; nor the calibration or sounds)
+  conditionsrm = grep("eyes|calib|sound|quietsch|tusch|melodie|knall", levels(factor(temp$MediaName)), value=T)
+  temp = subset(temp, temp$MediaName %in% conditionsrm==FALSE)
+  assign(paste(i, "analyzed", sep="_"), temp)
+}
+
+
+```
+
+## Step 4: Run analysis
+
+
+### Descriptive statistics
+
+```{r}
+```
+
+### Inferential statistics
+
+```{r}
+```
+
+## Step 5: Conclusion
+
+```{r}
+```
+
+[Please also include a brief text summary describing your findings. If this reproducibility check was a failure, you should note any suggestions as to what you think the likely cause(s) might be.]
+
+[This function will output information about the package versions used in this report:]
+
+```{r session_info, include=TRUE, echo=TRUE, results='markup'}
+devtools::session_info()
+```
