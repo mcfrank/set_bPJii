@@ -20,11 +20,6 @@ Infants were presented with pictures of fearful and happy faces that were displa
 ------
 
 #### Target outcomes: 
-> 3.1. Pupil diameter
-
-> We observed a main effect of Emotion [F(1, 19) = 6.45, MSE = .0039, p = .02, η2 = .25], revealing a larger pupil diameter for happy compared to fearful facial expressions irrespective of presentation condition (Figs. 2A and 3). There was no main effect of Presentation Condition [F(1, 19) = 0.40, MSE = .0029, p = .53, η2 = .02] and no interaction between Presentation Condition and Emotion [F(1, 19) = 1.17, MSE = .0011, p = .29, η2 = .06].
-
-> A control analysis excluding items from one actress displaying no teeth in the fearful condition (see Methods) and three participants yielded a similar pattern of results, although the main effect of emotion is only marginally significant in this case [F(1, 16) = 3.845, p = 0.068, η2 = .19]. The marginal effect is likely explained by reduced power because we had to exclude three additional infants from this analysis (n = 17 instead of n = 20 in the main analysis) in order to adhere to our inclusion criterion.
 
 > 3.2. Fixation duration
 
@@ -93,12 +88,13 @@ for (i in data2sheets){
 
 ### Pre-processing
 
-Because the raw data is given, all the preprocessing described in the article needs to be repeated. 
+Because the raw data is given, all the preprocessing described in the article needs to be repeated. It said the analysis was done in MATLAB, but sadly no script was included with the data submission. 
 
 First, for pupil diameter - one raw file of the Tobii recording was given for each participant. Need to remove trials based on their logic, and then take pupil averages per trial, then per condition and participant. 
 
 > Pupil diameter was recorded for both eyes separately, and if data was available for both eyes, the mean was computed. If a value was only available for one eye, this value was considered for further analysis (on average 15% of the data points). For analyzing the pupil size, the entire duration of one trial (i.e. 2300 ms) was considered (Fig. 1). A trial was excluded from further analysis if a value was recorded for less than 50% of the sampling points during this time. Additionally, a trial was excluded if the infant did not look at the section of the screen where the sub- liminal stimulus (face 1) was presented in the subliminal condi- tions to ensure that infants were able to process the stimuli (on an unconscious level). 
 
+First, process each participants raw data file, then put all datafiles together. Assume each value in "MediaName" represents a new megablock, as described in the paper. Will put in a within-megablock timestamp, then add trial number based on the blocks being 2300ms. This will be messed up in the callibration blocks, but these will be discarded for analysis. 
 ```{r}
 pupildata = grep("participant", ls(), value=T)
 for (i in pupildata){
@@ -118,10 +114,11 @@ for (i in pupildata){
     temp$NEyes = ifelse(is.na(temp$PupilLeft)==FALSE & is.na(temp$PupilRight)==FALSE, 2, 
                         ifelse(is.na(temp$PupilLeft) & is.na(temp$PupilRight), 0, 1))
     #keep only relevant conditions (not ones that say "eyes"; nor the calibration or sounds)
-    conditionsrm = grep("eyes|calib|sound|quietsch|tusch|melodie|knall", levels(factor(temp$MediaName)), value=T)
-    temp = subset(temp, temp$MediaName %in% conditionsrm==FALSE)
+    conditionstokeep = grep("happy|fear", levels(factor(temp$MediaName)), value=T)[-grep("eyes", grep("happy|fear", levels(factor(temp$MediaName)), value=T))]
+    temp = subset(temp, temp$MediaName %in% conditionstokeep)
     #add column for participant
     temp$participant = i
+    #saved as "analyzed" version of data
     assign(paste(i, "analyzed", sep="_"), temp)}
   else {}
 }
@@ -129,31 +126,158 @@ for (i in pupildata){
 #bind datafiles together
 allpart = do.call(rbind, mget(grep("analyzed", ls(), value=T)))
 
+
+#remove trials with fewer than 5 data points (relics of the time-stamp based trial number assignment - typically these are one or two sampling points at the end of a trial)
+trialcounts <- allpart %>%
+                  group_by(MediaName, participant, TrialNumber) %>%
+                  summarize(count=n())
+badtrials = paste(trialcounts$participant[which(trialcounts$count < 5)], trialcounts$MediaName[which(trialcounts$count < 5)], trialcounts$TrialNumber[which(trialcounts$count < 5)], sep="_")
+
 ```
 
+Now remove trials and participants based on logic described in article. 
+> Pupil diameter was recorded for both eyes separately, and if data was available for both eyes, the mean was computed. If a value was only available for one eye, this value was considered for further analysis (on average 15% of the data points). 
 
 ```{r}
+#create summary of how many trials had pupil data for 0, 1, or both eyes
 eyecounts <- allpart %>%
                 group_by(participant, MediaName, TrialNumber, NEyes) %>%
                 summarize(count = n()) %>%
                 spread(key=NEyes, value=count)
 eyecounts$totalcount = rowSums(eyecounts[,c("0", "1", "2")], na.rm=T)
+eyecounts$validcount = rowSums(eyecounts[,c("1", "2")], na.rm=T)
+
+#how many data points only had one eye? 
+mean(eyecounts$`1`/eyecounts$totalcount, na.rm=T) #out of all relevant trials
+mean(eyecounts$`1`/eyecounts$validcount, na.rm=T) #out of all valid trials
+```
+
+>  A trial was excluded from further analysis if a value was recorded for less than 50% of the sampling points during this time. 
+
+```{r}
+
+#create indicator to remove trials if less than 50% of the data points had data for one or more eye (more than 50% had 0)
 eyecounts$removetrial = ifelse(eyecounts$`0`/eyecounts$totalcount > .5, 1, 0)
 trialstoremove = paste(eyecounts[which(eyecounts$removetrial==1),]$participant, eyecounts[which(eyecounts$removetrial==1),]$MediaName, eyecounts[which(eyecounts$removetrial==1),]$TrialNumber, sep="_")
-#START HERE, REmove Trials
+
 
 ```
 
+> Additionally, a trial was excluded if the infant did not look at the section of the screen where the sub- liminal stimulus (face 1) was presented in the subliminal condi- tions to ensure that infants were able to process the stimuli (on an unconscious level). 
+
+This requires looking at the fixation data for subliminal trials to determine if the participant made any fixations on the face during 
+```{r}
+#set up indicator for which trials to remove for this requirement
+allpart$subnoeyes = ""
+#Trials without "neutral" in media name are supraliminal and can be 0
+allpart$subnoeyes[-grep("neutral", allpart$MediaName)] = 0
+
+#for the rows that are subliminal, if there are no eyes between 300-350, make value a 1, otherwise 0
+allpart$subnoeyes[grep("neutral", allpart$MediaName)] = ifelse(allpart$BlockTimestamp[grep("neutral", allpart$MediaName)] > 300 & allpart$BlockTimestamp[grep("neutral", allpart$MediaName)] < 350 & allpart$NEyes[grep("neutral", allpart$MediaName)]==0, 1, 0)
+
+#create list of participant, media, & trial to remove from the data
+subnoeyestoremove = unique(apply(subset(allpart, allpart$subnoeyes==1, select=c("participant", "MediaName", "TrialNumber")), 1, paste, collapse="_"))
+
+#subset the combined data to keep only the trials with data for > 50% of the points
+allpart$RMTrial = ifelse(paste(allpart$participant, allpart$MediaName, allpart$TrialNumber, sep="_") %in% unique(c(trialstoremove, badtrials, subnoeyestoremove)), 1, 0)
+allpart.rm = subset(allpart, allpart$RMTrial==0)
+
+```
+
+
+```{r}
+#add column with emotion/condition (remove specifics of faces from MediaName)
+allpart.rm$trialtype = gsub("[[:digit:]]+|_down|_up|\\.avi", "", allpart.rm$MediaName)
+
+#add column with condition (supraliminal: emotion_emotion; or subliminal; emotion_neutral)
+allpart.rm$condition = factor(ifelse(allpart.rm$trialtype=="fear_fear" | allpart.rm$trialtype == "happy_happy", "supraliminal", ifelse(allpart.rm$trialtype=="fear_neutral" | allpart.rm$trialtype == "happy_neutral", "subliminal", NA)))
+allpart.rm$Emotion = factor(ifelse(allpart.rm$trialtype=="fear_fear" | allpart.rm$trialtype == "fear_neutral", "fear", ifelse(allpart.rm$trialtype=="happy_happy" | allpart.rm$trialtype == "happy_neutral", "happy", NA)))
+
+#create column with average pupil measure (ignoring NAs if only one eye is present)
+allpart.rm$PupilLeft = as.numeric(as.character(allpart.rm$PupilLeft))
+allpart.rm$PupilRight = as.numeric(as.character(allpart.rm$PupilRight))
+allpart.rm$PupilAvg = rowMeans(subset(allpart.rm, select=c("PupilLeft", "PupilRight")), na.rm=T)
+
+#aggregate data to take pupil size means for each trial 
+allpart.rmag = allpart.rm %>%
+                group_by(MediaName, participant, TrialNumber, condition, Emotion) %>%
+                summarize(PupilSize = mean(PupilAvg, na.rm=T))
+
+#count number of trials per condition for each infant
+numtrials = allpart.rmag %>%
+              group_by(participant, condition, Emotion) %>%
+              summarize(ntrials = n())
+
+#remove infants who do not have at least one trial in each condition. 
+checktrials <- numtrials %>%
+                group_by(participant) %>%
+                summarize(count=n())
+
+kable(numtrials[which(numtrials$participant %in% checktrials$participant[which(checktrials$count!=4)]),])
+
+```
+
+> Only infants with at least one trial per con- dition following these criteria were included in the final analysis.
+
+Participants 2, 30, 4, and 9 did not have at least one trial per condition - remove them from analysis
+```{r}
+allpart.rmag = subset(allpart.rmag, allpart.rmag$participant %in% checktrials$participant[which(checktrials$count!=4)]==FALSE)
+
+#count number of trials per condition for each infant
+numtrials = allpart.rmag %>%
+              group_by(participant, condition, Emotion) %>%
+              summarize(ntrials = n())
+
+
+```
+
+> For statistical analysis, the mean pupil diameter over the entire trial duration was computed. These values were averaged sepa- rately for every participant and condition and divided by the over- all mean pupil size of that participant to account for possible interindividual differences.
+
+```{r}
+pupildata = allpart.rmag %>%
+            group_by(participant, condition, Emotion) %>%
+            summarize(AvgPupilSize = mean(PupilSize, na.rm=T))
+
+#divide by participant's mean pupil size
+pupildata$relPupilSize = NA
+for (i in 1:nrow(pupildata)) {
+  pupildata$relPupilSize[i] = pupildata$AvgPupilSize[i]/mean(pupildata$AvgPupilSize[which(pupildata$participant == pupildata$participant[i])])
+} 
+
+
+```
 
 ## Step 4: Run analysis
 
 
 ### Descriptive statistics
 
+Average number of trials infants (n = `r length(levels(factor(numtrials$participant)))`) contributed to the pupil data
+> In the final sample, infants contributed on average 9.7 trials per condition (SD = 3.9).
+
 ```{r}
+mean(numtrials$ntrials)
+sd(numtrials$ntrials)
+```
+Both the mean number of trials per condition and SD was higher than reported in the paper. 
+
+```{r}
+compareValues(reportedValue = 9.7, obtainedValue = 11.22)
+compareValues(reportedValue = 3.9, obtainedValue = 6.4)
 ```
 
 ### Inferential statistics
+> 3.1. Pupil diameter
+
+> We observed a main effect of Emotion [F(1, 19) = 6.45, MSE = .0039, p = .02, η2 = .25], revealing a larger pupil diameter for happy compared to fearful facial expressions irrespective of presentation condition (Figs. 2A and 3). There was no main effect of Presentation Condition [F(1, 19) = 0.40, MSE = .0029, p = .53, η2 = .02] and no interaction between Presentation Condition and Emotion [F(1, 19) = 1.17, MSE = .0011, p = .29, η2 = .06].
+
+```{r}
+summary(aov(relPupilSize ~ condition*Emotion + Error(participant/(condition*Emotion)), data=pupildata))
+
+```
+
+
+> A control analysis excluding items from one actress displaying no teeth in the fearful condition (see Methods) and three participants yielded a similar pattern of results, although the main effect of emotion is only marginally significant in this case [F(1, 16) = 3.845, p = 0.068, η2 = .19]. The marginal effect is likely explained by reduced power because we had to exclude three additional infants from this analysis (n = 17 instead of n = 20 in the main analysis) in order to adhere to our inclusion criterion.
 
 ```{r}
 ```
