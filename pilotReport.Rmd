@@ -127,12 +127,20 @@ for (i in pupildata){
 }
 
 #bind datafiles together
-
+allpart = do.call(rbind, mget(grep("analyzed", ls(), value=T)))
 
 ```
 
-How many trials had data for only 1 eye?
+
 ```{r}
+eyecounts <- allpart %>%
+                group_by(participant, MediaName, TrialNumber, NEyes) %>%
+                summarize(count = n()) %>%
+                spread(key=NEyes, value=count)
+eyecounts$totalcount = rowSums(eyecounts[,c("0", "1", "2")], na.rm=T)
+eyecounts$removetrial = ifelse(eyecounts$`0`/eyecounts$totalcount > .5, 1, 0)
+trialstoremove = paste(eyecounts[which(eyecounts$removetrial==1),]$participant, eyecounts[which(eyecounts$removetrial==1),]$MediaName, eyecounts[which(eyecounts$removetrial==1),]$TrialNumber, sep="_")
+#START HERE, REmove Trials
 
 ```
 
