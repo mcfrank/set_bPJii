@@ -152,6 +152,9 @@ mean(eyecounts$`1`/eyecounts$totalcount, na.rm=T) #out of all relevant trials
 mean(eyecounts$`1`/eyecounts$validcount, na.rm=T) #out of all valid trials
 ```
 
+The estimate of the percentage of one-eye trials among all relevant trials is a bit lower than reported (`r round(mean(eyecounts$`1`/eyecounts$totalcount, na.rm=T),1)`). The percentage out of only valid trials, those with one or two eyes recorded, is higher (`r round(mean(eyecounts$`1`/eyecounts$validcount, na.rm=T),1)`). 
+
+
 >  A trial was excluded from further analysis if a value was recorded for less than 50% of the sampling points during this time. 
 
 ```{r}
@@ -160,12 +163,14 @@ mean(eyecounts$`1`/eyecounts$validcount, na.rm=T) #out of all valid trials
 eyecounts$removetrial = ifelse(eyecounts$`0`/eyecounts$totalcount > .5, 1, 0)
 trialstoremove = paste(eyecounts[which(eyecounts$removetrial==1),]$participant, eyecounts[which(eyecounts$removetrial==1),]$MediaName, eyecounts[which(eyecounts$removetrial==1),]$TrialNumber, sep="_")
 
-
 ```
 
 > Additionally, a trial was excluded if the infant did not look at the section of the screen where the sub- liminal stimulus (face 1) was presented in the subliminal condi- tions to ensure that infants were able to process the stimuli (on an unconscious level). 
 
-This requires looking at the fixation data for subliminal trials to determine if the participant made any fixations on the face during 
+This requires looking at the fixation data for subliminal trials to determine if 
+the participant made any fixations on the face during the trial. 
+
+
 ```{r}
 #set up indicator for which trials to remove for this requirement
 allpart$subnoeyes = ""
