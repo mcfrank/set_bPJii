@@ -10,12 +10,12 @@ output:
 #### Pilot: Alicia Hofelich Mohr
 #### Co-pilot: Tom Hardwicke  
 #### Start date: 04-28-2017
-#### End date: [Insert end date - use US format]   
+#### End date: 07-14-2017   
 
 -------
 
 #### Methods summary: 
-Infants were presented with pictures of fearful and happy faces that were displayed subliminally (50ms; followed by a scrambled neutral face mask; then a neutral face for 900ms) or supraliminally (50ms; followed by a scrambled neutral face mask; then a face of the same emotion for 900ms). Eyetracking was used to measure pupil dialation across the whole trial and the duration of fixation on the second face. 
+Infants were presented with pictures of fearful and happy faces that were displayed subliminally (50ms; followed by a scrambled neutral face mask; then a neutral face for 900ms) or supraliminally (50ms; followed by a scrambled neutral face mask; then a face of the same emotion for 900ms). Eyetracking was used to measure pupil dilation across the whole trial and the duration of fixation on the second face. 
 
 ------
 
@@ -91,11 +91,37 @@ for (i in data2sheets){
 
 Because the raw data is given, all the preprocessing described in the article needs to be repeated. It said the analysis was done in MATLAB, but sadly no script was included with the data submission. 
 
+I initially tried to replicate the preprocessing based on the description in the article (which is presented below), but because the MATLAB article was not provided, there were a lot of assumptions that had to be made. Here are some specific questions/information that would be needed: 
+
+1. The data provided is assumed to be the raw data collected by Tobii for eyetracking and pupil measurement, but is not the the correct format needed for analysis. The article mentions a MATLAB script that was used for preprocessing this data. Could the authors provide this script? 
+2. There is no trial number or other variables about each trial in the pupil data files - the preprocessing done below is based on the time stamps and timing described in the article, but it is not specific enough to determine whether my division of trials are exactly the same as the authors'. 
+3. Each dataset does not contain the necessary variables for the analyses as described in the article. Condition, emotion, and trial had to be inserted based on the legend and by trying to interpret the numeric codes used in the media name (pupil data) and the tab/face codes in the fixation data. 
+4. Exclusion criteria were explained in the article, but it was unclear what variables in which dataset were used to make the decisions. The number of excluded participants (and remaining trials per participant) I got in my preprocessing steps did not match the numbers reported.
+5. Finally, because of the lack of information in the preprocessing and exclusion instructions, the degrees of freedom in the first analysis did not match the DoF reported in the results (F(1,19) reported versus F(1,21) found here). Instead of a numeric error, it's likely these errors all stem from a lack of information about the processing steps, given that only the raw data was provided. 
+
+
+I am putting the conclusions here, as the insufficient error prevents me from completing the replication. I will include the numeric errors that I found in the analyses I could complete, but I believe they may be a result of insufficient information. 
+
+```{r}
+codReport(Report_Type = 'pilot',
+          Article_ID = 'bPJii', 
+          Insufficient_Information_Errors = 1,
+          Decision_Errors = 0, 
+          Major_Numerical_Errors = 3, 
+          Minor_Numerical_Errors = 0)
+
+```
+
+
+### Preprocessing and Steps that were complete
+
+Code for each of the processing steps and analyses I attempted to complete is below. 
+
 First, for pupil diameter - one raw file of the Tobii recording was given for each participant. Need to remove trials based on their logic, and then take pupil averages per trial, then per condition and participant. 
 
 > Pupil diameter was recorded for both eyes separately, and if data was available for both eyes, the mean was computed. If a value was only available for one eye, this value was considered for further analysis (on average 15% of the data points). For analyzing the pupil size, the entire duration of one trial (i.e. 2300 ms) was considered (Fig. 1). A trial was excluded from further analysis if a value was recorded for less than 50% of the sampling points during this time. Additionally, a trial was excluded if the infant did not look at the section of the screen where the sub- liminal stimulus (face 1) was presented in the subliminal condi- tions to ensure that infants were able to process the stimuli (on an unconscious level). 
 
-First, process each participants raw data file, then put all datafiles together. Assume each value in "MediaName" represents a new megablock, as described in the paper. Will put in a within-megablock timestamp, then add trial number based on the blocks being 2300ms. This will be messed up in the callibration blocks, but these will be discarded for analysis. 
+First, process each participants raw data file, then put all datafiles together. Assume each value in "MediaName" represents a new megablock, as described in the paper. Will put in a within-megablock timestamp, then add trial number based on the blocks being 2300ms. This will be messed up in the calibration blocks, but these will be discarded for analysis. 
 ```{r}
 pupildata = grep("participant", ls(), value=T)
 for (i in pupildata){
@@ -162,6 +188,7 @@ allpartag = allpart %>%
 
 
 Now remove trials and participants based on logic described in article. 
+
 > Pupil diameter was recorded for both eyes separately, and if data was available for both eyes, the mean was computed. If a value was only available for one eye, this value was considered for further analysis (on average 15% of the data points). 
 
 ```{r}
@@ -178,7 +205,12 @@ mean(eyecounts$`1`/eyecounts$totalcount, na.rm=T) #out of all relevant trials
 mean(eyecounts$`1`/eyecounts$validcount, na.rm=T) #out of all valid trials
 ```
 
-The estimate of the percentage of one-eye trials among all relevant trials is a bit lower than reported (`r round(mean(eyecounts$`1`/eyecounts$totalcount, na.rm=T),1)`). The percentage out of only valid trials, those with one or two eyes recorded, is higher (`r round(mean(eyecounts$`1`/eyecounts$validcount, na.rm=T),1)`). 
+The estimate of the percentage of one-eye trials among all relevant trials is a bit lower than reported. The percentage out of only valid trials, those with one or two eyes recorded, is higher.
+
+```{r}
+compareValues(reportedValue = 15, obtainedValue = 11.9)
+```
+
 
 
 >  A trial was excluded from further analysis if a value was recorded for less than 50% of the sampling points during this time. 
@@ -258,7 +290,7 @@ allpart.rm2 <- subset(allpart.rm1, paste(allpart.rm1$participant, allpart.rm1$Em
 ```
 
 
-Now aggregate data to determine how many trials each participant contributed per condition. 
+Now aggregate data to determine how many trials each participant contributed per condition. It is unclear whether "condition" strictly means subliminal/supraliminal, or also includes emotion. 
 ```{r}
 
 #aggregate data to take pupil size means for each trial 
@@ -276,7 +308,7 @@ numtrials = allpart.rmag %>%
 
 #remove infants who do not have at least one trial in each condition. 
 kable(filter(numtrials, ntrials==0))
-parttorm <- filter(numtrials, ntrials==0)$participant
+parttorm <- unique(filter(numtrials, ntrials==0)$participant)
 
 
 ```
@@ -288,12 +320,15 @@ There were `r length(parttorm)` participants who needed to be removed.
 allpart.rmag = subset(allpart.rmag, allpart.rmag$participant %in% parttorm==FALSE)
 
 #count number of trials per condition for each infant
-numtrials = allpart.rmag %>%
-              group_by(participant, condition) %>%
-              summarize(ntrials = n())
-
+summarytrials <-
+  allpart.rmag %>%
+  group_by(participant, condition) %>%
+  summarize(ntrials = n()) %>%
+  ungroup() %>%
+  summarize(Mean = mean(ntrials), SD = sd(ntrials))
 
 ```
+
 
 > For statistical analysis, the mean pupil diameter over the entire trial duration was computed. These values were averaged sepa- rately for every participant and condition and divided by the over- all mean pupil size of that participant to account for possible interindividual differences.
 
@@ -317,17 +352,19 @@ for (i in 1:nrow(pupildata)) {
 ### Descriptive statistics
 
 Average number of trials infants (n = `r length(levels(factor(numtrials$participant)))`) contributed to the pupil data
+
 > In the final sample, infants contributed on average 9.7 trials per condition (SD = 3.9).
 
 ```{r}
-mean(numtrials$ntrials)
-sd(numtrials$ntrials)
+
+kable(summarytrials, digits = 1, caption = "Number of trials per infant")
 ```
-Both the mean number of trials per condition and SD was higher than reported in the paper. 
+
+The numbers here are quite different than what was reported. I'm guessing something went wrong in the preprocessing. The mean number of trials was slightly lower than reported in the paper, and the SD was also slightly lower. 
 
 ```{r}
-compareValues(reportedValue = 9.7, obtainedValue = 11.22)
-compareValues(reportedValue = 3.9, obtainedValue = 6.4)
+compareValues(reportedValue = 9.7, obtainedValue = 7.32)
+compareValues(reportedValue = 3.9, obtainedValue = 3.39)
 ```
 
 ### Inferential statistics
@@ -340,6 +377,10 @@ summary(aov(relPupilSize ~ condition*Emotion + Error(participant/(condition*Emot
 
 ```
 
+The degrees of freedom are off in this analysis, suggesting that the number of participants I excluded did not match the number they excluded in their analysis. There was a trend of a main effect of emotion in this analysis. 
+However, given the number of data points in this analysis doesn't match what they are reporting, the most likely error here is insufficient information. 
+
+At this point, we need more information from the authors to continue this replication analysis. 
 
 > A control analysis excluding items from one actress displaying no teeth in the fearful condition (see Methods) and three participants yielded a similar pattern of results, although the main effect of emotion is only marginally significant in this case [F(1, 16) = 3.845, p = 0.068, η2 = .19]. The marginal effect is likely explained by reduced power because we had to exclude three additional infants from this analysis (n = 17 instead of n = 20 in the main analysis) in order to adhere to our inclusion criterion.
 
